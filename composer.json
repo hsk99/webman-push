@@ -1,0 +1,22 @@
+{
+	"name": "hsk99/webman-push",
+	"type": "library",
+	"license": "MIT",
+	"homepage": "http://hsk99.com.cn",
+	"authors": [
+		{
+			"name": "hsk99",
+			"email": "3024186605@qq.com",
+			"homepage": "http://hsk99.com.cn"
+		}
+	],
+	"require": {
+		"workerman/webman-framework": "^1.2.1",
+		"webman/push": "^1.0.3"
+	},
+	"autoload": {
+		"psr-4": {
+			"Hsk99\\WebmanPush\\": "src"
+		}
+	}
+}
