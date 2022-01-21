@@ -12,7 +12,8 @@
 	],
 	"require": {
 		"workerman/webman-framework": "^1.2.1",
-		"webman/push": "^1.0.3"
+		"webman/push": "^1.0",
+		"hsk99/webman-exception": "^1.0"
 	},
 	"autoload": {
 		"psr-4": {

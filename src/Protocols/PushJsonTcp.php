@@ -5,12 +5,12 @@ namespace Protocols;
 use Workerman\Connection\TcpConnection;
 
 /**
- * JsonTcp 协议 （包头 + 报数据）
+ * JsonTcp 协议处理
  *
  * @author HSK
- * @date 2022-01-07 10:36:54
+ * @date 2021-11-23 11:32:50
  */
-class JsonTcpHead
+class PushJsonTcp
 {
     /**
      * 包头长度
@@ -21,7 +21,7 @@ class JsonTcpHead
      * 分包
      *
      * @author HSK
-     * @date 2022-01-07 10:37:28
+     * @date 2021-11-23 11:33:24
      *
      * @param string $buffer
      * @param TcpConnection $connection
@@ -34,9 +34,9 @@ class JsonTcpHead
             return 0;
         }
 
-        $unpackData = unpack("NdataLen", $buffer);
+        $unpackData = unpack("Ndata_len", $buffer);
 
-        $len = $unpackData['dataLen'] + self::PACKAGE_FIXED_LENGTH;
+        $len = $unpackData['data_len'] + self::PACKAGE_FIXED_LENGTH;
 
         if (strlen($buffer) < $len) {
             return 0;
@@ -49,37 +49,36 @@ class JsonTcpHead
      * 打包
      *
      * @author HSK
-     * @date 2022-01-07 10:37:50
+     * @date 2021-11-23 11:33:33
      *
-     * @param array $buffer
+     * @param string $buffer
      * @param TcpConnection $connection
      *
      * @return string
      */
-    public static function encode(array $buffer, TcpConnection $connection): string
+    public static function encode(string $buffer, TcpConnection $connection): string
     {
-        $json = json_encode($buffer, 320);
-        $len  = strlen($json);
+        $len = strlen($buffer);
 
-        return pack('N', $len) . $json;
+        return pack('N', $len) . $buffer;
     }
 
     /**
      * 解包
      *
      * @author HSK
-     * @date 2022-01-07 10:37:56
+     * @date 2021-11-23 11:33:41
      *
      * @param string $buffer
      * @param TcpConnection $connection
      *
-     * @return array
+     * @return string
      */
-    public static function decode(string $buffer, TcpConnection $connection): array
+    public static function decode(string $buffer, TcpConnection $connection): string
     {
-        $unpackData = unpack("NdataLen", $buffer);
-        $data       = substr($buffer, self::PACKAGE_FIXED_LENGTH, $unpackData['dataLen']);
+        $unpackData = unpack("Ndata_len", $buffer);
+        $data       = substr($buffer, self::PACKAGE_FIXED_LENGTH, $unpackData['data_len']);
 
-        return json_decode($data, true) ?? [];
+        return $data;
     }
 }
