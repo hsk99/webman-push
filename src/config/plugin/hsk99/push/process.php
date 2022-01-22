@@ -6,7 +6,7 @@ return [
     'server' => [
         'handler'     => Server::class,
         'listen'      => config('plugin.hsk99.push.app.listen'),
-        'protocol '   => config('plugin.hsk99.push.app.protocol'),
+        'protocol'    => config('plugin.hsk99.push.app.protocol'),
         'count'       => 1,
         'reloadable'  => false,
         'constructor' => [
