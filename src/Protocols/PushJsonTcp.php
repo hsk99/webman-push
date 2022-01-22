@@ -1,6 +1,6 @@
 <?php
 
-namespace Protocols;
+namespace Hsk99\WebmanPush\Protocols;
 
 use Workerman\Connection\TcpConnection;
 

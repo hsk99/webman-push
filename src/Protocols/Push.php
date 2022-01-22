@@ -1,11 +1,11 @@
 <?php
 
-namespace Protocols;
+namespace Hsk99\WebmanPush\Protocols;
 
 use Workerman\Connection\TcpConnection;
 use Workerman\Protocols\Http\Request;
 use Workerman\Protocols\Websocket;
-use Protocols\PushJsonTcp;
+use Hsk99\WebmanPush\Protocols\PushJsonTcp;
 
 /**
  * 组合协议
