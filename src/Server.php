@@ -8,13 +8,6 @@ use Hsk99\WebmanException\RunException;
 class Server extends \Webman\Push\Server
 {
     /**
-     * 进程ID
-     *
-     * @var int
-     */
-    protected $_workerPid = null;
-
-    /**
      * 进程名称
      *
      * @var string
@@ -35,7 +28,6 @@ class Server extends \Webman\Push\Server
     {
         parent::onWorkerStart($worker);
 
-        $this->_workerPid  = @posix_getpid();
         $this->_workerName = $worker->name;
     }
 
