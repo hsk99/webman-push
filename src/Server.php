@@ -2,35 +2,11 @@
 
 namespace Hsk99\WebmanPush;
 
-use support\Log;
+use Hsk99\WebmanPush\Util;
 use Hsk99\WebmanException\RunException;
 
 class Server extends \Webman\Push\Server
 {
-    /**
-     * 进程名称
-     *
-     * @var string
-     */
-    protected $_workerName = null;
-
-    /**
-     * 进程启动
-     *
-     * @author HSK
-     * @date 2022-01-20 15:49:07
-     *
-     * @param \Workerman\Worker $worker
-     *
-     * @return void
-     */
-    public function onWorkerStart($worker)
-    {
-        parent::onWorkerStart($worker);
-
-        $this->_workerName = $worker->name;
-    }
-
     /**
      * WebSocket 握手触发回调
      *
@@ -46,30 +22,14 @@ class Server extends \Webman\Push\Server
     {
         try {
             if (!preg_match('/ \/app\/([^\/^\?^ ]+)/', $header, $match)) {
-                if (config('plugin.hsk99.push.app.debug', false)) {
-                    echo "\033[31;1m" . date('Y-m-d H:i:s') . " app_key not found\n$header" . PHP_EOL . "\033[0m";
-                }
-                Log::info('app_key not found', [
-                    'worker'        => $this->_workerName,
-                    'header'        => $header,
-                    'remoteAddress' => $connection->getRemoteAddress(),
-                    'localAddress'  => $connection->getLocalAddress()
-                ]);
+                Util::info($connection, ["header" => $header], "app_key not found");
                 $connection->pauseRecv();
                 return;
             }
 
             $app_key = $match[1];
             if (!isset($this->appInfo[$app_key])) {
-                if (config('plugin.hsk99.push.app.debug', false)) {
-                    echo "\033[31;1m" . date('Y-m-d H:i:s') . " Invalid app_key $app_key\n" . PHP_EOL . "\033[0m";
-                }
-                Log::info('Invalid app_key', [
-                    'worker'        => $this->_workerName,
-                    'appKey'        => $app_key,
-                    'remoteAddress' => $connection->getRemoteAddress(),
-                    'localAddress'  => $connection->getLocalAddress()
-                ]);
+                Util::info($connection, ["app_key" => $app_key], "Invalid app_key");
                 $connection->pauseRecv();
                 return;
             }
@@ -115,40 +75,13 @@ class Server extends \Webman\Push\Server
     {
         try {
             $connection->clientNotSendPingCount = 0;
-
-            if (config('plugin.hsk99.push.app.debug', false)) {
-                echo "\033[31;1m" . date('Y-m-d H:i:s') . "\tDebug：" . $this->_workerName . "\t" . var_export($data, true) . PHP_EOL . "\033[0m";
-            }
-
-            $time = microtime(true);
-            Log::debug('', [
-                'worker'         => $this->_workerName,                                // 运行进程
-                'time'           => date('Y-m-d H:i:s.', $time) . substr($time, 11),   // 请求时间（包含毫秒时间）
-                'channel'        => 'request',                                         // 日志通道
-                'level'          => 'DEBUG',                                           // 日志等级
-                'message'        => '',                                                // 描述
-                'client_address' => $connection->getRemoteAddress(),                   // 请求客户端地址
-                'server_address' => $connection->getLocalAddress(),                    // 请求服务端地址
-                'context'        => $data ?? "",                                       // 请求数据
-            ]);
-
             $data = json_decode($data, true);
 
             if (
                 !isset($connection->appKey)
-                && isset($data)
-                && is_array($data)
-                && 'pusher:auth' !== $data['event']
+                && (isset($data) || !is_array($data) || isset($data['event']) || 'pusher:auth' !== $data['event'])
             ) {
-                if (config('plugin.hsk99.push.app.debug', false)) {
-                    echo "\033[31;1m" . date('Y-m-d H:i:s') . " connection not authenticated" . PHP_EOL . "\033[0m";
-                }
-                Log::info('connection not authenticated', [
-                    'worker'        => $this->_workerName,
-                    'data'          => $data,
-                    'remoteAddress' => $connection->getRemoteAddress(),
-                    'localAddress'  => $connection->getLocalAddress()
-                ]);
+                Util::info($connection, $data, "connection not authenticated");
                 $connection->pauseRecv();
                 return;
             }
@@ -160,32 +93,14 @@ class Server extends \Webman\Push\Server
             switch ($event) {
                 case 'pusher:auth':
                     if (!isset($data['app_key'])) {
-                        if (config('plugin.hsk99.push.app.debug', false)) {
-                            echo "\033[31;1m" . date('Y-m-d H:i:s') . " app_key not found" . PHP_EOL . "\033[0m";
-                        }
-
-                        Log::info('app_key not found', [
-                            'worker'        => $this->_workerName,
-                            'data'          => $data,
-                            'remoteAddress' => $connection->getRemoteAddress(),
-                            'localAddress'  => $connection->getLocalAddress()
-                        ]);
-
+                        Util::info($connection, $data, "app_key not found");
                         $connection->pauseRecv();
                         return;
                     }
 
                     $app_key = $data['app_key'];
                     if (!isset($this->appInfo[$app_key])) {
-                        if (config('plugin.hsk99.push.app.debug', false)) {
-                            echo "\033[31;1m" . date('Y-m-d H:i:s') . " Invalid app_key $app_key\n" . PHP_EOL . "\033[0m";
-                        }
-                        Log::info('Invalid app_key', [
-                            'worker'        => $this->_workerName,
-                            'appKey'        => $app_key,
-                            'remoteAddress' => $connection->getRemoteAddress(),
-                            'localAddress'  => $connection->getLocalAddress()
-                        ]);
+                        Util::info($connection, ["app_key" => $app_key], "Invalid app_key");
                         $connection->pauseRecv();
                         return;
                     }

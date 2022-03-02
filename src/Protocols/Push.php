@@ -4,14 +4,15 @@ namespace Hsk99\WebmanPush\Protocols;
 
 use Workerman\Connection\TcpConnection;
 use Workerman\Protocols\Http\Request;
-use Workerman\Protocols\Websocket;
-use Hsk99\WebmanPush\Protocols\PushJsonTcp;
+use Hsk99\WebmanPush\Protocols\PushTcpHead;
+use Hsk99\WebmanPush\Protocols\PushTcpEof;
+use Hsk99\WebmanPush\Protocols\PushWebSocket;
 
 /**
- * 组合协议
+ * Push 组合协议
  *
  * @author HSK
- * @date 2021-11-23 11:24:07
+ * @date 2022-03-02 14:23:00
  */
 class Push
 {
@@ -19,7 +20,7 @@ class Push
      * 分包
      *
      * @author HSK
-     * @date 2021-11-23 11:47:26
+     * @date 2022-03-02 14:23:00
      *
      * @param string $buffer
      * @param TcpConnection $connection
@@ -28,29 +29,34 @@ class Push
      */
     public static function input(string $buffer, TcpConnection $connection): int
     {
-        // 首次连接，解析数据包协议
-        if (!isset($connection->PACKAGE_TYPE)) {
+        if (!isset($connection->packetProtocol)) {
             $request = new Request($buffer);
-            if (strtolower($request->header('connection')) === 'upgrade') {
-                $protocol = 'Websocket';
-            } else {
-                $protocol = 'PushJsonTcp';
+
+            switch (true) {
+                case chr(65) === substr($buffer, 0, 1):
+                    $protocol = 'PushTcpHead';
+                    break;
+                case chr(66) === substr($buffer, 0, 1):
+                    $protocol = 'PushTcpEof';
+                    break;
+                case 'upgrade' === strtolower($request->header('connection')):
+                default:
+                    $protocol = 'PushWebSocket';
+                    break;
             }
 
-            // 记录当前连接使用协议
-            $connection->PACKAGE_TYPE = $protocol;
+            $connection->packetProtocol = $protocol;
         }
 
-        // 协议分发处理
-        switch ($connection->PACKAGE_TYPE) {
-            case 'Websocket':
-                return Websocket::input($buffer, $connection);
+        switch ($connection->packetProtocol) {
+            case 'PushWebSocket':
+                return PushWebSocket::input($buffer, $connection);
                 break;
-            case 'PushJsonTcp':
-                return PushJsonTcp::input($buffer, $connection);
+            case 'PushTcpHead':
+                return 1 + PushTcpHead::input(substr($buffer, 1), $connection);
                 break;
-            default:
-                return PushJsonTcp::input($buffer, $connection);
+            case 'PushTcpEof':
+                return 1 + PushTcpEof::input(substr($buffer, 1), $connection);
                 break;
         }
     }
@@ -59,7 +65,7 @@ class Push
      * 打包
      *
      * @author HSK
-     * @date 2021-11-23 11:47:36
+     * @date 2022-03-02 14:23:00
      *
      * @param string $buffer
      * @param TcpConnection $connection
@@ -68,18 +74,17 @@ class Push
      */
     public static function encode(string $buffer, TcpConnection $connection): string
     {
-        if (!isset($connection->PACKAGE_TYPE)) $connection->PACKAGE_TYPE = 'PushJsonTcp';
+        if (!isset($connection->packetProtocol)) $connection->packetProtocol = 'PushTcpHead';
 
-        // 协议分发处理
-        switch ($connection->PACKAGE_TYPE) {
-            case 'Websocket':
-                return Websocket::encode($buffer, $connection);
+        switch ($connection->packetProtocol) {
+            case 'PushWebSocket':
+                return PushWebSocket::encode($buffer, $connection);
                 break;
-            case 'PushJsonTcp':
-                return PushJsonTcp::encode($buffer, $connection);
+            case 'PushTcpHead':
+                return chr(65) + PushTcpHead::encode($buffer, $connection);
                 break;
-            default:
-                return PushJsonTcp::encode($buffer, $connection);
+            case 'PushTcpEof':
+                return chr(66) + PushTcpEof::encode($buffer, $connection);
                 break;
         }
     }
@@ -88,7 +93,7 @@ class Push
      * 解包
      *
      * @author HSK
-     * @date 2021-11-23 11:47:41
+     * @date 2022-03-02 14:23:00
      *
      * @param string $buffer
      * @param TcpConnection $connection
@@ -97,18 +102,17 @@ class Push
      */
     public static function decode(string $buffer, TcpConnection $connection): string
     {
-        if (!isset($connection->PACKAGE_TYPE)) $connection->PACKAGE_TYPE = 'PushJsonTcp';
+        if (!isset($connection->packetProtocol)) $connection->packetProtocol = 'PushTcpHead';
 
-        // 协议分发处理
-        switch ($connection->PACKAGE_TYPE) {
-            case 'Websocket':
-                return Websocket::decode($buffer, $connection);
+        switch ($connection->packetProtocol) {
+            case 'PushWebSocket':
+                return PushWebSocket::decode($buffer, $connection);
                 break;
-            case 'PushJsonTcp':
-                return PushJsonTcp::decode($buffer, $connection);
+            case 'PushTcpHead':
+                return PushTcpHead::decode(substr($buffer, 1), $connection);
                 break;
-            default:
-                return PushJsonTcp::decode($buffer, $connection);
+            case 'PushTcpEof':
+                return PushTcpEof::decode(substr($buffer, 1), $connection);
                 break;
         }
     }
