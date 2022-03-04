@@ -79,7 +79,7 @@ class Server extends \Webman\Push\Server
 
             if (
                 !isset($connection->appKey)
-                && (isset($data) || !is_array($data) || isset($data['event']) || 'pusher:auth' !== $data['event'])
+                && (!isset($data) || !is_array($data) || !isset($data['event']) || 'pusher:auth' !== $data['event'])
             ) {
                 Util::info($connection, $data, "connection not authenticated");
                 $connection->pauseRecv();

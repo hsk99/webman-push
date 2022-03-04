@@ -81,10 +81,10 @@ class Push
                 return PushWebSocket::encode($buffer, $connection);
                 break;
             case 'PushTcpHead':
-                return chr(65) + PushTcpHead::encode($buffer, $connection);
+                return chr(65) . PushTcpHead::encode($buffer, $connection);
                 break;
             case 'PushTcpEof':
-                return chr(66) + PushTcpEof::encode($buffer, $connection);
+                return chr(66) . PushTcpEof::encode($buffer, $connection);
                 break;
         }
     }
