@@ -55,8 +55,7 @@ class Install
                 }
             }
             //symlink(__DIR__ . "/$source", base_path()."/$dest");
-            // copy_dir(__DIR__ . "/$source", base_path() . "/$dest");
-            static::copyDir(__DIR__ . "/$source", base_path() . "/$dest");
+            copy_dir(__DIR__ . "/$source", base_path() . "/$dest");
         }
     }
 
@@ -75,34 +74,6 @@ class Install
                 unlink($path);
             }*/
             remove_dir($path);
-        }
-    }
-
-    /**
-     * 拷贝文件，存在不覆盖
-     *
-     * @author HSK
-     * @date 2022-01-13 11:47:17
-     *
-     * @param string $source
-     * @param string $dest
-     *
-     * @return void
-     */
-    protected static function copyDir($source, $dest)
-    {
-        if (is_dir($source)) {
-            if (!is_dir($dest)) {
-                mkdir($dest);
-            }
-            $files = scandir($source);
-            foreach ($files as $file) {
-                if ($file !== "." && $file !== "..") {
-                    static::copyDir("$source/$file", "$dest/$file");
-                }
-            }
-        } else if (file_exists($source) && !is_file($dest)) {
-            copy($source, $dest);
         }
     }
 }
