@@ -18,7 +18,7 @@ class Util
      */
     public static function info(\Workerman\Connection\TcpConnection $connection, $buffer, $message = '')
     {
-        if (is_array($temp = json_decode($buffer, true))) {
+        if (is_string($buffer) && is_array($temp = json_decode($buffer, true))) {
             $buffer = $temp;
         }
 
@@ -55,7 +55,7 @@ class Util
      */
     public static function debug(\Workerman\Connection\TcpConnection $connection, $buffer, $message = '')
     {
-        if (is_array($temp = json_decode($buffer, true))) {
+        if (is_string($buffer) && is_array($temp = json_decode($buffer, true))) {
             $buffer = $temp;
         }
 
