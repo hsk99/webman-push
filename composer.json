@@ -6,12 +6,13 @@
 	"authors": [
 		{
 			"name": "hsk99",
-			"email": "3024186605@qq.com",
+			"email": "hsk@hsk99.com.cn",
 			"homepage": "http://hsk99.com.cn"
 		}
 	],
 	"require": {
 		"webman/push": "^1.0",
+		"webman/channel": "^1.0",
 		"hsk99/webman-exception": "^1.0"
 	},
 	"autoload": {

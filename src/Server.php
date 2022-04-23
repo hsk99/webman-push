@@ -2,11 +2,89 @@
 
 namespace Hsk99\WebmanPush;
 
+use Workerman\Worker;
+use Workerman\Timer;
+use Workerman\Protocols\Http\Request;
+use Workerman\Protocols\Http\Response;
 use Hsk99\WebmanPush\Util;
 use Hsk99\WebmanException\RunException;
 
 class Server extends \Webman\Push\Server
 {
+    /**
+     * Channel
+     *
+     * @var bool
+     */
+    public $channel = false;
+
+    /**
+     * Channel IP
+     *
+     * @var string
+     */
+    public $channelIp = null;
+
+    /**
+     * Channel Port
+     *
+     * @var int
+     */
+    public $channelPort = null;
+
+    /**
+     * 构造函数
+     *
+     * @author HSK
+     * @date 2022-04-23 01:17:04
+     *
+     * @param bool $channel
+     * @param string $channel_ip
+     * @param int $channel_port
+     * @param string $api_listen
+     * @param array $app_info
+     */
+    public function __construct($channel, $channel_ip, $channel_port, $api_listen, $app_info)
+    {
+        $this->channel     = $channel;
+        $this->channelIp   = $channel_ip;
+        $this->channelPort = $channel_port;
+        $this->apiListen   = $api_listen;
+        $this->appInfo     = $app_info;
+    }
+
+    /**
+     * 服务启动
+     *
+     * @author HSK
+     * @date 2022-04-23 01:07:59
+     *
+     * @param \Workerman\Worker $worker
+     *
+     * @return void
+     */
+    public function onWorkerStart($worker)
+    {
+        Timer::add($this->keepAliveTimeout / 2, array($this, 'checkHeartbeat'));
+        Timer::add($this->webHookDelay, array($this, 'webHookCheck'));
+
+        if ($this->channel) {
+            \Webman\Channel\Client::connect($this->channelIp, $this->channelPort);
+        }
+
+        if (0 === $worker->id) {
+            $api_worker = new Worker($this->apiListen);
+            $api_worker->onMessage = array($this, 'onApiClientMessage');
+            $api_worker->listen();
+        } else {
+            if ($this->channel) {
+                \Webman\Channel\Client::on('hsk99WebmanPushApiPush', function ($eventData) {
+                    $this->publishToClients($eventData['app_key'], $eventData['channel'], $eventData['event'], $eventData['data'], $eventData['socket_id']);
+                });
+            }
+        }
+    }
+
     /**
      * WebSocket 握手触发回调
      *
@@ -225,9 +303,149 @@ class Server extends \Webman\Push\Server
                     // {"event":"pusher:error","data":{"code":null,"message":"To send client events, you must enable this feature in the Settings page of your dashboard."}}
                     // 全局发布事件
                     $this->publishToClients($connection->appKey, $channel, $event, json_encode($data['data'], JSON_UNESCAPED_UNICODE), $connection->socketID);
+                    if ($this->channel) {
+                        \Webman\Channel\Client::publish('hsk99WebmanPushApiPush', [
+                            'app_key'   => $connection->appKey,
+                            'channel'   => $channel,
+                            'event'     => $event,
+                            'data'      => json_encode($data['data'], JSON_UNESCAPED_UNICODE),
+                            'socket_id' => $connection->socketID,
+                        ]);
+                    }
             }
         } catch (\Throwable $th) {
             RunException::report($th);
+        }
+    }
+
+    /**
+     * API 收到数据回调
+     *
+     * @author HSK
+     * @date 2022-04-23 17:53:40
+     *
+     * @param \Workerman\Connection\TcpConnection $connection
+     * @param Request $request
+     *
+     * @return void
+     */
+    public function onApiClientMessage($connection, Request $request)
+    {
+        if (!($app_key = $request->get('auth_key'))) {
+            return $connection->send(new Response(400, [], 'Bad Request'));
+        }
+
+        if (!isset($this->appInfo[$app_key])) {
+            return $connection->send(new Response(401, [], 'Invalid app_key'));
+        }
+
+        $path = $request->path();
+        $explode = explode('/', trim($path, '/'));
+        if (count($explode) < 3) {
+            return $connection->send(new Response(400, [], 'Bad Request'));
+        }
+
+        $auth_signature = $request->get('auth_signature');
+        $params = $request->get();
+        unset($params['auth_signature']);
+        ksort($params);
+        $string_to_sign = $request->method() . "\n" . $path . "\n" . self::array_implode('=', '&', $params);
+
+        $real_auth_signature = hash_hmac('sha256', $string_to_sign, $this->appInfo[$app_key]['app_secret'], false);
+        if ($auth_signature !== $real_auth_signature) {
+            return $connection->send(new Response(401, [], 'Invalid signature'));
+        }
+
+        $type = $explode[2];
+        switch ($type) {
+            case 'batch_events':
+                $packages = json_decode($request->rawBody(), true);
+                if (!$packages || !isset($packages['batch'])) {
+                    return $connection->send(new Response(400, [], 'Bad request'));
+                }
+
+                $packages = $packages['batch'];
+                foreach ($packages as $package) {
+                    $channel = $package['channel'];
+                    $event = $package['name'];
+                    $data = $package['data'];
+                    $socket_id = isset($package['socket_id']) ? isset($package['socket_id']) : null;
+                    $this->publishToClients($app_key, $channel, $event, $data, $socket_id);
+                    if ($this->channel) {
+                        \Webman\Channel\Client::publish('hsk99WebmanPushApiPush', [
+                            'app_key'   => $app_key,
+                            'channel'   => $channel,
+                            'event'     => $event,
+                            'data'      => $data,
+                            'socket_id' => $socket_id,
+                        ]);
+                    }
+                }
+                return $connection->send('{}');
+                break;
+            case 'events':
+                $package = json_decode($request->rawBody(), true);
+                if (!$package) {
+                    return $connection->send(new Response(401, [], 'Invalid signature'));
+                }
+                $channels = $package['channels'];
+                $event = $package['name'];
+                $data = $package['data'];
+                foreach ($channels as $channel) {
+                    $socket_id = isset($package['socket_id']) ? isset($package['socket_id']) : null;
+                    $this->publishToClients($app_key, $channel, $event, $data, $socket_id);
+                    if ($this->channel) {
+                        \Webman\Channel\Client::publish('hsk99WebmanPushApiPush', [
+                            'app_key'   => $app_key,
+                            'channel'   => $channel,
+                            'event'     => $event,
+                            'data'      => $data,
+                            'socket_id' => $socket_id,
+                        ]);
+                    }
+                }
+                return $connection->send('{}');
+            case 'channels':
+                if (!isset($explode[3])) {
+                    return $connection->send(new Response(400, [], 'Bad Request'));
+                }
+                $channel = $explode[3];
+                // users
+                if (isset($explode[4])) {
+                    if ($explode[4] !== 'users') {
+                        return $connection->send(new Response(400, [], 'Bad Request'));
+                    }
+                    $id_array = isset($this->_globalData[$app_key][$channel]['users']) ?
+                        array_keys($this->_globalData[$app_key][$channel]['users']) : array();
+                    $user_id_array = array();
+                    foreach ($id_array as $id) {
+                        $user_id_array[] = array('id' => $id);
+                    }
+
+                    $connection->send(json_encode($user_id_array, JSON_UNESCAPED_UNICODE));
+                }
+                // info
+                $info = explode(',', $request->get('info', ''));
+                $occupied = isset($this->_globalData[$app_key][$channel]);
+                $user_count = isset($this->_globalData[$app_key][$channel]['users']) ? count($this->_globalData[$app_key][$channel]['users']) : 0;
+                $subscription_count = $occupied ? $this->_globalData[$app_key][$channel]['subscription_count'] : 0;
+                $channel_info = array(
+                    'occupied' => $occupied
+                );
+                foreach ($info as $item) {
+                    switch ($item) {
+                        case 'user_count':
+                            $channel_info['user_count'] = $user_count;
+                            break;
+                        case 'subscription_count':
+                            $channel_info['subscription_count'] = $subscription_count;
+                            break;
+                    }
+                }
+                $connection->send(json_encode($channel_info, JSON_UNESCAPED_UNICODE));
+                break;
+            default:
+                return $connection->send(new Response(400, [], 'Bad Request'));
         }
     }
 }
