@@ -8,7 +8,7 @@
 
 ## 安装
 
-` composer require webman-push `
+` composer require hsk99/webman-push `
 
 
 ## 使用
