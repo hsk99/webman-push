@@ -33,6 +33,13 @@ class Server extends \Webman\Push\Server
     public $channelPort = null;
 
     /**
+     * Worker：0 以外的其他Worker所存储订阅数据
+     *
+     * @var array
+     */
+    protected $_globalDataChannel = [];
+
+    /**
      * 构造函数
      *
      * @author HSK
@@ -65,6 +72,8 @@ class Server extends \Webman\Push\Server
      */
     public function onWorkerStart($worker)
     {
+        $this->_globalID = $worker->id + 1;
+
         Timer::add($this->keepAliveTimeout / 2, array($this, 'checkHeartbeat'));
         Timer::add($this->webHookDelay, array($this, 'webHookCheck'));
 
@@ -76,6 +85,12 @@ class Server extends \Webman\Push\Server
             $api_worker = new Worker($this->apiListen);
             $api_worker->onMessage = array($this, 'onApiClientMessage');
             $api_worker->listen();
+
+            if ($this->channel) {
+                \Webman\Channel\Client::on('hsk99WebmanPushGlobalData', function ($eventData) {
+                    $this->_globalDataChannel[$eventData['worker']] = $eventData['data'];
+                });
+            }
         } else {
             if ($this->channel) {
                 \Webman\Channel\Client::on('hsk99WebmanPushApiPush', function ($eventData) {
@@ -228,6 +243,13 @@ class Server extends \Webman\Push\Server
                         }
 
                         $this->subscribePresence($connection, $channel, $user_data['user_id'], $user_data['user_info']);
+
+                        if ($this->channel && 0 !== $connection->worker->id) {
+                            \Webman\Channel\Client::publish('hsk99WebmanPushGlobalData', [
+                                'worker' => $connection->worker->id,
+                                'data'   => $this->_globalData
+                            ]);
+                        }
                         return;
                     } elseif ($channel_type === 'private') {
                         // {"event":"pusher:subscribe","data":{"auth":"b054014693241bcd9c26:10e3b628cb78e8bc4d1f44d47c9294551b446ae6ec10ef113d3d7e84e99763e6","channel_data":"{\"user_id\":100,\"user_info\":{\"name\":\"123\"}}","channel":"presence-channel"}}
@@ -240,6 +262,13 @@ class Server extends \Webman\Push\Server
                         $this->subscribePrivateChannel($connection, $channel);
                     } else {
                         $this->subscribePublicChannel($connection, $channel);
+                    }
+
+                    if ($this->channel && 0 !== $connection->worker->id) {
+                        \Webman\Channel\Client::publish('hsk99WebmanPushGlobalData', [
+                            'worker' => $connection->worker->id,
+                            'data'   => $this->_globalData
+                        ]);
                     }
 
                     // {"event":"pusher_internal:subscription_succeeded","data":"{}","channel":"my-channel"}
@@ -268,6 +297,13 @@ class Server extends \Webman\Push\Server
                             $uid = $connection->channels[$channel];
                             $this->unsubscribePresenceChannel($connection, $channel, $uid);
                             break;
+                    }
+
+                    if ($this->channel && 0 !== $connection->worker->id) {
+                        \Webman\Channel\Client::publish('hsk99WebmanPushGlobalData', [
+                            'worker' => $connection->worker->id,
+                            'data'   => $this->_globalData
+                        ]);
                     }
                     return;
 
@@ -422,6 +458,13 @@ class Server extends \Webman\Push\Server
                         $user_id_array[] = array('id' => $id);
                     }
 
+                    foreach ($this->_globalDataChannel as $globalData) {
+                        $id_array_temp = isset($globalData[$app_key][$channel]['users']) ? array_keys($globalData[$app_key][$channel]['users']) : [];
+                        foreach ($id_array_temp as $id) {
+                            $user_id_array[] = ['id' => $id];
+                        }
+                    }
+
                     $connection->send(json_encode($user_id_array, JSON_UNESCAPED_UNICODE));
                 }
                 // info
@@ -429,6 +472,13 @@ class Server extends \Webman\Push\Server
                 $occupied = isset($this->_globalData[$app_key][$channel]);
                 $user_count = isset($this->_globalData[$app_key][$channel]['users']) ? count($this->_globalData[$app_key][$channel]['users']) : 0;
                 $subscription_count = $occupied ? $this->_globalData[$app_key][$channel]['subscription_count'] : 0;
+
+                foreach ($this->_globalDataChannel as $globalData) {
+                    $occupied           = $occupied ?: isset($globalData[$app_key][$channel]);
+                    $user_count         += isset($globalData[$app_key][$channel]['users']) ? count($globalData[$app_key][$channel]['users']) : 0;
+                    $subscription_count += isset($globalData[$app_key][$channel]) ? $globalData[$app_key][$channel]['subscription_count'] : 0;
+                }
+
                 $channel_info = array(
                     'occupied' => $occupied
                 );

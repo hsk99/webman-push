@@ -5,6 +5,8 @@
 
 > [hsk99/webman-push](https://github.com/hsk99/webman-push "hsk99/webman-push") 继承于 [webman/push](https://github.com/webman-php/push "webman/push") 开发，在原有功能基础上添加了多协议合并、多进程运行。
 
+> Push Server 多进程使用 [webman/channel](https://github.com/webman-php/channel "webman/channel") 实现 API 推送内部数据分发 和 多Worker订阅数据整合响应
+
 
 ## 安装
 
