@@ -79,6 +79,13 @@ class Server extends \Webman\Push\Server
 
         if ($this->channel) {
             \Webman\Channel\Client::connect($this->channelIp, $this->channelPort);
+
+            \Webman\Channel\Client::on('hsk99WebmanPushApiPush', function ($eventData) {
+                if ($this->_globalID === $eventData['worker']) {
+                    return;
+                }
+                $this->publishToClients($eventData['app_key'], $eventData['channel'], $eventData['event'], $eventData['data'], $eventData['socket_id']);
+            });
         }
 
         if (0 === $worker->id) {
@@ -89,12 +96,6 @@ class Server extends \Webman\Push\Server
             if ($this->channel) {
                 \Webman\Channel\Client::on('hsk99WebmanPushGlobalData', function ($eventData) {
                     $this->_globalDataChannel[$eventData['worker']] = $eventData['data'];
-                });
-            }
-        } else {
-            if ($this->channel) {
-                \Webman\Channel\Client::on('hsk99WebmanPushApiPush', function ($eventData) {
-                    $this->publishToClients($eventData['app_key'], $eventData['channel'], $eventData['event'], $eventData['data'], $eventData['socket_id']);
                 });
             }
         }
@@ -309,13 +310,6 @@ class Server extends \Webman\Push\Server
 
                     // {"event":"client-event","data":{"your":"hi"},"channel":"presence-channel"}
                 default:
-                    if (
-                        false === strpos($event, 'pusher:')
-                        || !isset($event)
-                    ) {
-                        return $connection->send($this->error(null, 'illegal data'));
-                    }
-
                     if (strpos($event, 'pusher:') === 0) {
                         return $connection->send($this->error(null, 'Unknown event'));
                     }
@@ -341,6 +335,7 @@ class Server extends \Webman\Push\Server
                     $this->publishToClients($connection->appKey, $channel, $event, json_encode($data['data'], JSON_UNESCAPED_UNICODE), $connection->socketID);
                     if ($this->channel) {
                         \Webman\Channel\Client::publish('hsk99WebmanPushApiPush', [
+                            'worker'    => $this->_globalID,
                             'app_key'   => $connection->appKey,
                             'channel'   => $channel,
                             'event'     => $event,
@@ -409,6 +404,7 @@ class Server extends \Webman\Push\Server
                     $this->publishToClients($app_key, $channel, $event, $data, $socket_id);
                     if ($this->channel) {
                         \Webman\Channel\Client::publish('hsk99WebmanPushApiPush', [
+                            'worker'    => $this->_globalID,
                             'app_key'   => $app_key,
                             'channel'   => $channel,
                             'event'     => $event,
@@ -432,6 +428,7 @@ class Server extends \Webman\Push\Server
                     $this->publishToClients($app_key, $channel, $event, $data, $socket_id);
                     if ($this->channel) {
                         \Webman\Channel\Client::publish('hsk99WebmanPushApiPush', [
+                            'worker'    => $this->_globalID,
                             'app_key'   => $app_key,
                             'channel'   => $channel,
                             'event'     => $event,
